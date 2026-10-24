@@ -1,0 +1,16 @@
+# Copy to terraform.tfvars (git-ignored) and edit. No secrets belong here:
+# secret values are written by `googlemcp auth login`.
+
+project_id = "REPLACE_WITH_PROJECT_ID"
+
+# Override catalog defaults per product (catalog/services.json).
+# chat and meet need a Google Workspace account; appsscript needs the
+# per-user Apps Script API toggle; youtube_reporting creates server-side jobs.
+products = {
+  # gmail      = false
+  # appsscript = true
+}
+
+# Optional: Secret Manager containers for the secretmanager backend.
+# The default local backend is the OS keyring, which needs none.
+enable_secret_manager = false

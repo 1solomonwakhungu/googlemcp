@@ -1,0 +1,129 @@
+[project]
+name = "googlemcp"
+version = "0.1.0"
+description = "Local stdio MCP server that exposes scoped Google APIs to MCP clients"
+readme = "README.md"
+requires-python = ">=3.12"
+# PEP 639 SPDX expression. It supersedes "License ::" trove classifiers, so
+# classifiers below deliberately omit one.
+license = "MIT"
+license-files = ["LICENSE"]
+authors = [{ name = "Solomon Wakhungu" }]
+keywords = [
+  "mcp",
+  "model-context-protocol",
+  "fastmcp",
+  "google",
+  "google-api",
+  "google-workspace",
+  "gmail",
+  "google-drive",
+  "google-calendar",
+  "oauth",
+]
+classifiers = [
+  "Development Status :: 3 - Alpha",
+  "Environment :: Console",
+  "Intended Audience :: Developers",
+  "Operating System :: OS Independent",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3 :: Only",
+  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
+  "Topic :: Internet",
+  "Topic :: Software Development :: Libraries :: Python Modules",
+  "Typing :: Typed",
+]
+dependencies = [
+  "fastmcp>=4.0.11,<5",
+  "google-api-python-client>=2.190",
+  "google-auth>=2.40",
+  "google-auth-oauthlib>=1.2",
+  "keyring>=25",
+  "pydantic>=2.10",
+  "pydantic-settings>=2.10",
+  "requests>=2.32",
+]
+
+[project.scripts]
+googlemcp = "googlemcp.cli:main"
+
+[project.urls]
+Homepage = "https://github.com/1solomonwakhungu/googlemcp"
+Repository = "https://github.com/1solomonwakhungu/googlemcp"
+Issues = "https://github.com/1solomonwakhungu/googlemcp/issues"
+Changelog = "https://github.com/1solomonwakhungu/googlemcp/blob/main/CHANGELOG.md"
+
+[project.optional-dependencies]
+secretmanager = [
+    "google-cloud-secret-manager>=2.20",
+    "google-crc32c>=1.5",
+]
+
+[dependency-groups]
+dev = [
+  "pytest>=8.3",
+  "pytest-cov>=6.0",
+  "ruff>=0.12",
+  "mypy>=1.15",
+  "pip-audit>=2.7",
+  "google-cloud-secret-manager>=2.20",
+  "google-crc32c>=1.5",
+]
+
+[build-system]
+requires = ["hatchling>=1.27"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/googlemcp"]
+
+[tool.hatch.build.targets.wheel.force-include]
+"catalog/services.json" = "googlemcp/services.json"
+
+# Ship only what is needed to build and read about the package. The test suite
+# needs docs/, infra/ and scripts/ too, so it is run from a clone, not the sdist.
+# pyproject.toml, README.md, and LICENSE are always included by hatchling.
+[tool.hatch.build.targets.sdist]
+include = [
+  "/src",
+  "/catalog",
+  "/CHANGELOG.md",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B", "UP", "S", "BLE", "RUF", "SIM", "PTH"]
+ignore = ["S101"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["S105", "S106"]
+
+[tool.mypy]
+python_version = "3.12"
+strict = true
+mypy_path = "src"
+packages = ["googlemcp"]
+
+[[tool.mypy.overrides]]
+module = [
+  "googleapiclient.*",
+  "google_auth_oauthlib.*",
+  "keyring.*",
+  "google.cloud.*",
+  "google_auth_httplib2",
+  "google_crc32c",
+  "httplib2.*",
+]
+ignore_missing_imports = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q --strict-markers"
+markers = [
+  "live: requires real Google credentials; skipped unless GOOGLEMCP_LIVE=1",
+]

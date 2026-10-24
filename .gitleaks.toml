@@ -1,0 +1,30 @@
+# Gitleaks configuration: the upstream default rules plus Google OAuth
+# credential formats this project handles. See docs/security.md.
+title = "GoogleMCP gitleaks config"
+
+[extend]
+useDefault = true
+
+[[rules]]
+id = "google-oauth-client-secret"
+description = "Google OAuth client secret"
+regex = '''GOCSPX-[A-Za-z0-9_-]{28}'''
+keywords = ["gocspx-"]
+
+[[rules]]
+id = "google-oauth-refresh-token"
+description = "Google OAuth refresh token"
+regex = '''\b1//0[A-Za-z0-9_-]{40,}'''
+keywords = ["1//0"]
+
+[[rules]]
+id = "google-oauth-access-token"
+description = "Google OAuth access token"
+regex = '''\bya29\.[A-Za-z0-9_-]{30,}'''
+keywords = ["ya29."]
+
+[[rules]]
+id = "google-oauth-client-json"
+description = "Downloaded Google OAuth client JSON"
+regex = '''"client_secret"\s*:\s*"[^"]{10,}"'''
+keywords = ["client_secret"]

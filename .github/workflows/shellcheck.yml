@@ -1,0 +1,52 @@
+# Shellcheck for repository shell scripts: every tracked .sh under scripts/
+# (today scripts/acceptance; any future script is covered automatically) and
+# infra/terraform/scripts/*.sh. Workflow run blocks are covered separately
+# by actionlint in ci.yml. The shellcheck binary is pinned by version and
+# SHA-256 (digest cross-checked against the GitHub release asset digest).
+name: shellcheck
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: shellcheck-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  SHELLCHECK_VERSION: "v0.11.0"
+  SHELLCHECK_SHA256: "8c3be12b05d5c177a04c29e3c78ce89ac86f1595681cab149b65b97c4e227198"
+
+jobs:
+  shellcheck:
+    name: shellcheck (scripts)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Install shellcheck (checksum verified)
+        run: |
+          archive="shellcheck-${SHELLCHECK_VERSION}.linux.x86_64.tar.xz"
+          curl -fsSL -o "$RUNNER_TEMP/$archive" \
+            "https://github.com/koalaman/shellcheck/releases/download/${SHELLCHECK_VERSION}/$archive"
+          echo "${SHELLCHECK_SHA256}  $RUNNER_TEMP/$archive" | sha256sum --check --strict
+          tar -xJf "$RUNNER_TEMP/$archive" -C "$RUNNER_TEMP"
+          echo "$RUNNER_TEMP/shellcheck-${SHELLCHECK_VERSION}" >> "$GITHUB_PATH"
+      - name: shellcheck
+        run: |
+          # git pathspec '*' also matches '/', so subdirectories are included.
+          count=$(git ls-files -- 'scripts/*.sh' 'infra/terraform/scripts/*.sh' | wc -l)
+          if [ "$count" -eq 0 ]; then
+            echo "::notice::no shell scripts on this ref; shellcheck skipped."
+            exit 0
+          fi
+          shellcheck --version
+          git ls-files -z -- 'scripts/*.sh' 'infra/terraform/scripts/*.sh' \
+            | xargs -0 shellcheck --severity=style --format=gcc

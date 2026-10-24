@@ -1,0 +1,12 @@
+# Checkov configuration for CI (see docs/security.md).
+# Scans Terraform and GitHub Actions workflows. Secrets scanning is left to
+# gitleaks so one tool owns that policy.
+framework:
+  - terraform
+  - github_actions
+skip-path:
+  - .venv
+  - .terraform
+compact: true
+quiet: true
+download-external-modules: false

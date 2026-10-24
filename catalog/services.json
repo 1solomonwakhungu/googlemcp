@@ -1,0 +1,167 @@
+{
+  "$comment": "Single source of truth for Google products covered by GoogleMCP. Terraform enables api_services for enabled products; MCP adapters must declare the same key and api_services. default_enabled=false products need an explicit opt-in.",
+  "version": 1,
+  "platform_services": [
+    "serviceusage.googleapis.com",
+    "cloudresourcemanager.googleapis.com",
+    "iam.googleapis.com",
+    "iamcredentials.googleapis.com",
+    "secretmanager.googleapis.com"
+  ],
+  "products": {
+    "tasks": {
+      "title": "Google Tasks",
+      "api_services": [
+        "tasks.googleapis.com"
+      ],
+      "default_enabled": true,
+      "risk": "standard"
+    },
+    "gmail": {
+      "title": "Gmail",
+      "api_services": [
+        "gmail.googleapis.com"
+      ],
+      "default_enabled": true,
+      "risk": "restricted_scopes"
+    },
+    "calendar": {
+      "title": "Google Calendar",
+      "api_services": [
+        "calendar-json.googleapis.com"
+      ],
+      "default_enabled": true,
+      "risk": "standard"
+    },
+    "drive": {
+      "title": "Google Drive",
+      "api_services": [
+        "drive.googleapis.com"
+      ],
+      "default_enabled": true,
+      "risk": "restricted_scopes"
+    },
+    "docs": {
+      "title": "Google Docs",
+      "api_services": [
+        "docs.googleapis.com"
+      ],
+      "default_enabled": true,
+      "risk": "standard"
+    },
+    "sheets": {
+      "title": "Google Sheets",
+      "api_services": [
+        "sheets.googleapis.com"
+      ],
+      "default_enabled": true,
+      "risk": "standard"
+    },
+    "slides": {
+      "title": "Google Slides",
+      "api_services": [
+        "slides.googleapis.com"
+      ],
+      "default_enabled": true,
+      "risk": "standard"
+    },
+    "forms": {
+      "title": "Google Forms",
+      "api_services": [
+        "forms.googleapis.com"
+      ],
+      "default_enabled": true,
+      "risk": "standard"
+    },
+    "people": {
+      "title": "People and Contacts",
+      "api_services": [
+        "people.googleapis.com"
+      ],
+      "default_enabled": true,
+      "risk": "standard"
+    },
+    "meet": {
+      "title": "Google Meet",
+      "api_services": [
+        "meet.googleapis.com"
+      ],
+      "default_enabled": false,
+      "risk": "requires_workspace_account"
+    },
+    "driveactivity": {
+      "title": "Drive Activity",
+      "api_services": [
+        "driveactivity.googleapis.com"
+      ],
+      "default_enabled": true,
+      "risk": "standard"
+    },
+    "chat": {
+      "title": "Google Chat",
+      "api_services": [
+        "chat.googleapis.com"
+      ],
+      "default_enabled": false,
+      "risk": "requires_workspace_account_and_chat_app_config"
+    },
+    "youtube": {
+      "title": "YouTube Data",
+      "api_services": [
+        "youtube.googleapis.com"
+      ],
+      "default_enabled": true,
+      "risk": "quota_sensitive"
+    },
+    "youtube_analytics": {
+      "title": "YouTube Analytics",
+      "api_services": [
+        "youtubeanalytics.googleapis.com"
+      ],
+      "default_enabled": true,
+      "risk": "standard"
+    },
+    "youtube_reporting": {
+      "title": "YouTube Reporting",
+      "api_services": [
+        "youtubereporting.googleapis.com"
+      ],
+      "default_enabled": false,
+      "risk": "creates_server_side_jobs"
+    },
+    "analytics": {
+      "title": "Google Analytics",
+      "api_services": [
+        "analyticsdata.googleapis.com",
+        "analyticsadmin.googleapis.com"
+      ],
+      "default_enabled": true,
+      "risk": "standard"
+    },
+    "searchconsole": {
+      "title": "Search Console",
+      "api_services": [
+        "searchconsole.googleapis.com"
+      ],
+      "default_enabled": true,
+      "risk": "standard"
+    },
+    "appsscript": {
+      "title": "Apps Script",
+      "api_services": [
+        "script.googleapis.com"
+      ],
+      "default_enabled": false,
+      "risk": "code_execution"
+    },
+    "photos": {
+      "title": "Google Photos (Library app-created data and Picker)",
+      "api_services": [
+        "photoslibrary.googleapis.com",
+        "photospicker.googleapis.com"
+      ],
+      "default_enabled": true,
+      "risk": "standard"
+    }
+  }
+}

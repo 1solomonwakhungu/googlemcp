@@ -1,0 +1,46 @@
+# End-to-end MCP suite (tests/e2e): the real server with every adapter,
+# real credential and error-mapping code, and a routed fake Google transport,
+# plus the real `googlemcp serve` stdio process with outbound sockets blocked.
+# The server is local-only (stdio); there is no HTTP surface to test.
+# No network, no credentials. On main every catalog adapter must be present
+# (E2E_REQUIRE_ALL_ADAPTERS=1); feature branches skip products they lack.
+# Actions are pinned to full commit SHAs; see docs/security.md.
+name: e2e
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: e2e-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  e2e:
+    name: e2e ${{ matrix.python-version }} (MCP in-memory and stdio)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.12", "3.13"]
+    env:
+      E2E_REQUIRE_ALL_ADAPTERS: ${{ github.ref == 'refs/heads/main' && '1' || '0' }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
+        with:
+          version: "0.12.23"
+          python-version: ${{ matrix.python-version }}
+          enable-cache: true
+      - name: uv sync
+        run: uv sync --locked --all-extras
+      - name: pytest tests/e2e
+        run: uv run pytest tests/e2e -rs

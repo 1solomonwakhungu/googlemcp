@@ -1,0 +1,32 @@
+name: Feature request
+description: Suggest a new tool, Google product, or improvement.
+labels: [enhancement]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem
+      description: What you are trying to do, and what gets in the way today.
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed change
+      description: The tool, option, or behavior you would like to see.
+    validations:
+      required: true
+
+  - type: textarea
+    id: scopes
+    attributes:
+      label: Google APIs and OAuth scopes
+      description: |
+        Which Google API(s) this needs, and the narrowest OAuth scope that
+        would work. Note whether the scope is sensitive or restricted.
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered

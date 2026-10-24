@@ -1,0 +1,64 @@
+name: Bug report
+description: Something in GoogleMCP does not work as documented.
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for the report. Before you paste anything, remove OAuth client
+        secrets, refresh or access tokens, email addresses, file IDs, and any
+        other personal data. Report security problems privately through the
+        repository's Security tab, not in a public issue.
+
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened
+      description: What you did, what you expected, and what happened instead.
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      description: The smallest set of commands or tool calls that shows the problem.
+      placeholder: |
+        1. uv run googlemcp ...
+        2. Call tool ... from the MCP client
+        3. ...
+    validations:
+      required: true
+
+  - type: input
+    id: version
+    attributes:
+      label: GoogleMCP version or commit
+      description: Output of `git rev-parse --short HEAD`, or the release tag.
+    validations:
+      required: true
+
+  - type: input
+    id: product
+    attributes:
+      label: Google product(s) involved
+      description: Catalog key(s) from `googlemcp products`, for example gmail or drive.
+
+  - type: input
+    id: client
+    attributes:
+      label: MCP client
+      description: The client that launched the server, and its version.
+
+  - type: input
+    id: environment
+    attributes:
+      label: OS and Python version
+      placeholder: macOS 15, Python 3.12.8
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs or error output
+      description: Redacted. This field is rendered as code.
+      render: text

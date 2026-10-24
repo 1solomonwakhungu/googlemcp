@@ -1,0 +1,56 @@
+# Secrets and credentials: never commit
+client_secret*.json
+credentials*.json
+*credentials*.json
+token*.json
+*.refresh_token
+*.pem
+*.p12
+*.key
+.env
+.env.*
+!.env.example
+secrets/
+.googlemcp/
+
+# Terraform state, plans, and provider caches
+*.tfstate
+*.tfstate.*
+*.tfplan
+*.tfvars
+!*.tfvars.example
+!examples/**/*.tfvars.example
+.terraform/
+.terraform.lock.hcl.bak
+crash.log
+# Per-operator backend config (copied from backend.tf.example); keep it local
+infra/terraform/backend.tf
+crash.*.log
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json
+.terraformrc
+terraform.rc
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+coverage.xml
+htmlcov/
+dist/
+build/
+*.egg-info/
+
+# Local agent and editor state
+.openrig/
+.claude/
+.mcp.json
+.DS_Store
+.idea/
+.vscode/

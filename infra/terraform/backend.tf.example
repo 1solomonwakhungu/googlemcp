@@ -1,0 +1,26 @@
+# Example remote state backend. Run ./bootstrap first; its state_bucket
+# output is the bucket name to use here. Pick one of two ways to configure it.
+#
+# Option A: copy this file to backend.tf (git-ignored), replace the bucket
+# placeholder, then run:
+#   terraform init -migrate-state
+#
+# Option B: keep the bucket out of every file. Create backend.tf containing
+# only an empty block,
+#   terraform {
+#     backend "gcs" {}
+#   }
+# and pass the values at init time (partial configuration):
+#   terraform init -migrate-state \
+#     -backend-config="bucket=<state_bucket output>" \
+#     -backend-config="prefix=googlemcp/main"
+#
+# The bucket name is not secret, but it is specific to your project, so keep
+# backend.tf local. Never commit terraform.tfstate. Without a backend.tf,
+# Terraform keeps state in a local terraform.tfstate (also git-ignored).
+terraform {
+  backend "gcs" {
+    bucket = "REPLACE_WITH_STATE_BUCKET"
+    prefix = "googlemcp/main"
+  }
+}
