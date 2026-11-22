@@ -1,29 +1,43 @@
+<!-- mcp-name: io.github.1solomonwakhungu/googlemcp -->
+
 # GoogleMCP
 
-GoogleMCP is a local MCP server that gives an MCP client (Claude Desktop,
-Claude Code, Cursor, Hermes Agent, or any other stdio client) scoped access
-to your own Google account. It runs on your machine over stdio: it opens no
-network listener, has no HTTP mode, and is not meant to be hosted. Google
-API calls use a refresh token from your own Desktop OAuth client, kept in
-the OS keyring by default.
+[![CI](https://github.com/1solomonwakhungu/googlemcp/actions/workflows/ci.yml/badge.svg)](https://github.com/1solomonwakhungu/googlemcp/actions/workflows/ci.yml)
+[![Python 3.12+](https://img.shields.io/badge/python-3.12%2B-blue.svg)](https://www.python.org/downloads/)
+[![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 
-- Read-only by default. Write tools need a per-product opt-in, and
-  destructive tools (delete, trash, send) need a second opt-in.
-- Covers Workspace apps and other Google APIs: Tasks, YouTube, Search
-  Console, Google Analytics, Photos, Apps Script, and more (table below).
-- Terraform enables the Google APIs. The OAuth consent screen and the
-  Desktop OAuth client have no API, so you create them in the console.
+**A local-only, read-only-by-default MCP server giving AI clients scoped access to 19 Google products (98 tools) with zero cloud relay and zero listening ports.**
 
-Each person who uses GoogleMCP creates their own Google Cloud project and
-OAuth client. There is no shared client and no central service.
+Connect Claude Code, Claude Desktop, Cursor, Hermes Agent, or any stdio MCP client to your Google Workspace **plus** YouTube, Google Analytics (GA4), Search Console, Drive Activity, Apps Script, and Google Photos. Credentials stay in your OS keyring, and every tool is gated by a 3-tier safety model built with prompt injection in mind.
 
-Documentation index: [docs/README.md](docs/README.md).
+- **3-tier least-privilege safety:** Read scopes and read tools only by default (45 read tools across 15 default products). Write tools need per-product `GOOGLEMCP_WRITE_PRODUCTS`; destructive tools (delete, trash, send, run code) need a second opt-in (`GOOGLEMCP_ALLOW_DESTRUCTIVE=true`) and carry explicit MCP `destructiveHint` annotations.
+- **Strict local stdio transport:** `googlemcp serve` opens no network listener, has no HTTP mode, and is never hosted. Each user brings their own Google Cloud project and Desktop OAuth client (PKCE on `127.0.0.1` during one-time login).
+- **19 Google products in one server:** Workspace apps alongside YouTube Data, YouTube Analytics, YouTube Reporting, Google Analytics (GA4), Search Console, Drive Activity, Apps Script, and Google Photos (post-2025 Picker and app-created Library API).
+- **Operator-grade diagnostics:** Inspect exact scopes (`googlemcp scopes`), active tools (`googlemcp tools`), token health (`googlemcp auth status`), and run live read-only smoke checks across every enabled product (`googlemcp doctor --probe`).
 
-## Products
+Full documentation index: [docs/README.md](docs/README.md).
 
-`catalog/services.json` is the source of truth; Terraform and the server both
-read it, and `tests/test_readme.py` checks this table against it. Scopes and
-tools per product are in [docs/inventory.md](docs/inventory.md).
+## What you can ask your AI (read-only by default)
+
+- *"Search my Gmail for invoices from last month and summarize the totals."*
+- *"Check my Google Calendar free/busy slots tomorrow and list open Google Tasks."*
+- *"Pull top Search Console queries with dropping CTR and compare against GA4 traffic."*
+- *"Find the Q3 launch doc in Google Drive, read its text, and check recent Drive Activity."*
+- *"Fetch my YouTube channel analytics for the last 28 days and list my top videos."*
+
+## Safety tiers
+
+| Tier | Configuration | What the MCP client can see and request |
+|---|---|---|
+| Read-only (default) | `GOOGLEMCP_PRODUCTS` unset (or product list) | Read-only OAuth scopes and read tools only (45 tools across 15 default products) |
+| Scoped writes | Add `GOOGLEMCP_WRITE_PRODUCTS=tasks,docs` | Adds write scopes and non-destructive write tools (drafts, edits, create) for listed products only |
+| Destructive actions | Add `GOOGLEMCP_ALLOW_DESTRUCTIVE=true` | Also exposes irreversible tools (send email, delete task/event/contact, trash file, send chat, run Apps Script) with MCP `destructiveHint` |
+
+Secrets live in your OS keyring by default (macOS Keychain, Windows Credential Locker, Linux Secret Service), with `file` (strict `0600`), `dir`, `env`, and optional Google Secret Manager backends. Upstream Google errors have URLs and credential-like values redacted, and 401/403 error bodies are withheld entirely. Threat model and CI scans: [docs/security.md](docs/security.md). Vulnerability reports: [SECURITY.md](SECURITY.md).
+
+## Products (19 adapters, 98 tools)
+
+`catalog/services.json` is the source of truth; Terraform and the server both read it, and `tests/test_readme.py` checks this table against it. Every tool and OAuth scope is listed in [docs/inventory.md](docs/inventory.md).
 
 | Key | Product | Default | Why off by default |
 |---|---|---|---|
@@ -47,19 +61,11 @@ tools per product are in [docs/inventory.md](docs/inventory.md).
 | `appsscript` | Apps Script | off | Can run code in your account; also needs a manual per-user setting |
 | `photos` | Google Photos (Library app-created data and Picker) | on | |
 
-"Default on" means the product is enabled when `GOOGLEMCP_PRODUCTS` is unset,
-still read-only. Gmail and Drive use restricted scopes, and YouTube Data has
-a daily quota. Google removed the broad Photos Library scopes on 2025-03-31,
-so the Library API reaches only media this app created; the Picker API reads
-photos you select
-([Photos API updates](https://developers.google.com/photos/support/updates)).
-Google Tasks setup on its own: [docs/tasks.md](docs/tasks.md).
+"Default on" means enabled read-only when `GOOGLEMCP_PRODUCTS` is unset. Gmail and Drive use restricted scopes; YouTube Data has a daily quota. Google removed broad Photos Library scopes on 2025-03-31, so the Library API reaches only app-created media while the Picker API reads photos you choose ([Photos API updates](https://developers.google.com/photos/support/updates)). Single-product Tasks guide: [docs/tasks.md](docs/tasks.md).
 
 ## Quick start
 
-You need Python 3.12+, [uv](https://docs.astral.sh/uv/), the
-[`gcloud` CLI](https://cloud.google.com/sdk/docs/install), and a Google
-account. Terraform 1.9+ is optional (it is one of two ways to enable APIs).
+Prerequisites: Python 3.12+, [uv](https://docs.astral.sh/uv/), the [`gcloud` CLI](https://cloud.google.com/sdk/docs/install), and a Google account. Optional: Terraform 1.9+ if you prefer IaC for API enablement ([docs/terraform.md](docs/terraform.md)).
 
 ### 1. Install
 
@@ -67,19 +73,16 @@ account. Terraform 1.9+ is optional (it is one of two ways to enable APIs).
 git clone https://github.com/1solomonwakhungu/googlemcp
 cd googlemcp
 uv sync
-uv run googlemcp products      # what is enabled; no Google call
+uv run googlemcp products      # inspect enabled products offline
 ```
 
-Or run it without a checkout (not published on PyPI):
+Or run directly without a local checkout (not yet published on PyPI):
 
 ```sh
 uvx --from git+https://github.com/1solomonwakhungu/googlemcp googlemcp products
 ```
 
-The Terraform module and `scripts/acceptance/verify_stored_client.py` live
-in the repository, so clone it if you want either.
-
-### 2. Create a Google Cloud project and enable the APIs
+### 2. Create a Google Cloud project and enable APIs
 
 ```sh
 gcloud auth login
@@ -87,138 +90,94 @@ gcloud projects create PROJECT_ID --name="GoogleMCP"
 gcloud config set project PROJECT_ID
 ```
 
-Then enable the APIs for the products you want, either with Terraform
-([docs/terraform.md](docs/terraform.md)) or with `gcloud services enable`
-([docs/manual-steps.md](docs/manual-steps.md#enable-the-apis)).
+Enable the APIs for your chosen products with `gcloud services enable` ([docs/manual-steps.md](docs/manual-steps.md#enable-the-apis)) or the optional Terraform module ([docs/terraform.md](docs/terraform.md)).
 
-### 3. Configure the consent screen and create a Desktop OAuth client
+### 3. Pick products, configure consent, and download a Desktop OAuth client
 
-The product and write settings decide which scopes you add here and which
-scopes `auth login` requests. Export the settings your MCP client will use
-(step 5) in the shell you use for steps 3 and 4. Unset means the 15 default
-products, read-only.
+Export the same settings your MCP client will use so `scopes` and `auth login` match:
 
 ```sh
 export GOOGLEMCP_PRODUCTS=tasks,calendar,gmail,drive
+uv run googlemcp scopes        # exact OAuth scopes to paste in step 4 below
 ```
 
-In the Google Auth Platform console
-([docs/manual-steps.md](docs/manual-steps.md)):
+In the Google Auth Platform console (no public API exists to automate this; full walkthrough in [docs/manual-steps.md](docs/manual-steps.md)):
 
-1. Branding: app name and your email as support and developer contact.
-2. Audience: user type **External**, and add your Google account as a test
-   user.
-3. Publishing status: in **Testing**, Google expires the refresh token 7
-   days after consent. **In production** (unverified, personal use) avoids
-   that; see [docs/access-longevity.md](docs/access-longevity.md).
-4. Data access: add the scopes printed by `uv run googlemcp scopes`.
-5. Clients: create a **Desktop app** client and download its JSON once.
+1. **Branding:** set app name and your email as support/developer contact.
+2. **Audience:** choose **External**, add your Google account as a test user.
+3. **Publishing status:** **Testing** expires refresh tokens after 7 days; **In production** (unverified, personal use) avoids weekly re-login ([docs/access-longevity.md](docs/access-longevity.md)).
+4. **Data access:** paste the scopes printed by `uv run googlemcp scopes`.
+5. **Clients:** create a **Desktop app** OAuth client and download its JSON once.
 
-Because the app is unverified and asks for sensitive and restricted scopes
-(Gmail, Drive), Google shows a "Google hasn't verified this app" warning at
-sign-in. You click **Advanced**, then **Go to GoogleMCP (unsafe)**.
+Because the app is your own unverified personal app, Google shows "Google hasn't verified this app" during sign-in. Click **Advanced**, then **Go to GoogleMCP (unsafe)**.
 
-### 4. Sign in
+### 4. Sign in and verify
 
 ```sh
 uv run googlemcp auth login --client-secrets ~/Downloads/client_secret_XXXX.json
 uv run googlemcp auth status \
-  && uv run python scripts/acceptance/verify_stored_client.py --json ~/Downloads/client_secret_XXXX.json \
+  && uv run googlemcp auth verify-client ~/Downloads/client_secret_XXXX.json \
   && rm ~/Downloads/client_secret_XXXX.json
-uv run googlemcp doctor --probe          # one read-only call per enabled product
+uv run googlemcp doctor --probe   # one cheap read-only call per enabled product
 ```
 
-`auth login` stores the client ID, client secret, and refresh token in the
-OS keyring. The downloaded file is deleted only after the store is confirmed
-to hold exactly this client; the console never shows the full secret again.
-To use Google Secret Manager instead, see
-[docs/manual-steps.md](docs/manual-steps.md#5-desktop-oauth-client-for-googlemcp-auth-login).
+`auth login` saves the client ID, client secret, and refresh token in your OS keyring (or Google Secret Manager: [docs/manual-steps.md](docs/manual-steps.md#5-desktop-oauth-client-for-googlemcp-auth-login)). The downloaded JSON is deleted only after verifying the stored client matches it.
 
 ### 5. Connect your MCP client
 
-The client starts the server as a child process. Give it the same settings
-you exported in step 3. For Claude Code:
+**Claude Code:**
 
 ```sh
 claude mcp add --env GOOGLEMCP_PRODUCTS=tasks,calendar,gmail,drive \
   --transport stdio googlemcp -- uv run --directory /path/to/googlemcp googlemcp serve
 ```
 
-To turn on writes later (for example `GOOGLEMCP_WRITE_PRODUCTS=tasks`),
-export the new setting, rerun `uv run googlemcp scopes`, add the new scopes
-on the consent screen's Data access page, run `uv run googlemcp auth login`
-again, and then add the setting to the client entry.
+**Claude Desktop / Cursor (`mcpServers` JSON):**
 
-Claude Desktop, Cursor, Hermes Agent, and a generic JSON entry:
-[docs/clients.md](docs/clients.md). To check the whole setup end to end,
-read-only: [docs/acceptance.md](docs/acceptance.md).
+```json
+{
+  "mcpServers": {
+    "googlemcp": {
+      "command": "uv",
+      "args": ["run", "--directory", "/path/to/googlemcp", "googlemcp", "serve"],
+      "env": {
+        "GOOGLEMCP_PRODUCTS": "tasks,calendar,gmail,drive"
+      }
+    }
+  }
+}
+```
 
-## Safety model
+Full setup for Claude Desktop, Cursor, generic stdio clients: [docs/clients.md](docs/clients.md). Hermes Agent: [docs/hermes.md](docs/hermes.md). End-to-end verification runbook: [docs/acceptance.md](docs/acceptance.md).
 
-- **Local only.** `googlemcp serve` speaks MCP over stdin and stdout and logs
-  to stderr. The only listener is the one-time `auth login` loopback
-  redirect on 127.0.0.1.
-- **Read-only by default.** Only read scopes are requested and only read
-  tools are listed until a product is in `GOOGLEMCP_WRITE_PRODUCTS`.
-- **Destructive tools need a second opt-in.** Delete, trash, and send tools
-  also need `GOOGLEMCP_ALLOW_DESTRUCTIVE=true`, and carry the MCP
-  `destructiveHint` so a client can ask before calling them.
-- **Off-by-default products** (Meet, Chat, YouTube Reporting, Apps Script)
-  must be listed in `GOOGLEMCP_PRODUCTS` explicitly.
-- **Secrets stay out of the repository and Terraform state.** The CLI writes
-  them to the keyring (or another backend); no command prints one. Google
-  error text is passed to the model with URLs and credential-looking values
-  redacted, and withheld entirely for 401 and 403.
-- **Prompt injection is a real risk.** Email, documents, and calendar
-  entries the model reads can contain instructions. Keep writes off for
-  products you only need to read, and keep your client's tool-approval
-  prompts on.
-
-Threat model and CI scans: [docs/security.md](docs/security.md). To report a
-vulnerability, see [SECURITY.md](SECURITY.md).
-
-## Access longevity
-
-While the publishing status is Testing, every refresh token expires 7 days
-after consent. In production, the token lasts until you revoke it, it goes
-unused for six months, it is displaced by the 100-tokens-per-client limit,
-or (with Gmail scopes) you change your password. To recover, run
-`uv run googlemcp auth login` again. Details:
-[docs/access-longevity.md](docs/access-longevity.md).
+To enable writes later (for example `GOOGLEMCP_WRITE_PRODUCTS=tasks`), export the updated setting, rerun `uv run googlemcp scopes`, add the new scopes on the Data access page, rerun `uv run googlemcp auth login`, and update the client `env` block.
 
 ## How this compares
 
-- **Google's Workspace MCP servers**
-  ([docs](https://developers.google.com/workspace/guides/configure-mcp-servers)):
-  remote servers hosted by Google, one per product (Gmail, Drive, Calendar,
-  and other Workspace apps), launched in 2026 and in Developer Preview as of
-  October 2026. You need to join the Workspace Developer Preview Program.
-- **[taylorwilsdon/google_workspace_mcp](https://github.com/taylorwilsdon/google_workspace_mcp)**:
-  a community Python server for Workspace apps with stdio and HTTP
-  transports, which can also be hosted for several users.
-- **GoogleMCP** runs only as a local stdio process for one account, covers
-  Google APIs outside Workspace (Tasks, YouTube, Search Console, Analytics,
-  Photos, Apps Script), and starts read-only with per-product write and
-  separate destructive opt-ins. It does not offer a remote or multi-user
-  mode.
+| Server | Scope | Default safety | Transport & hosting |
+|---|---|---|---|
+| **GoogleMCP** | 19 products (Workspace + YouTube, GA4, Search Console, Photos Picker, Apps Script) | Read-only scopes & tools; per-product writes + separate destructive gate; OS keyring | Local stdio only; zero listening ports; single user |
+| [taylorwilsdon/google_workspace_mcp](https://github.com/taylorwilsdon/google_workspace_mcp) | Workspace apps | Optional read-only flag & tool tiers | Local stdio or hosted HTTP / multi-user |
+| [Google Workspace MCP servers](https://developers.google.com/workspace/guides/configure-mcp-servers) | Workspace apps (one remote server per product; Developer Preview) | Managed Google OAuth | Remote servers hosted by Google |
 
-ChatGPT custom connectors need a server on public HTTPS, so GoogleMCP does
-not work there; ChatGPT has its own built-in Google connectors.
+ChatGPT custom connectors require a public HTTPS server, so GoogleMCP intentionally does not target them; use ChatGPT's built-in Google connectors there.
+
+## Access longevity
+
+In **Testing** status, Google expires refresh tokens 7 days after consent. Switching your personal app to **In production** (unverified, personal use) removes the 7-day cap; tokens then last until revoked, unused for six months, displaced by the 100-tokens-per-client limit, or invalidated by a password change (when Gmail scopes are enabled). Re-authenticate anytime with `uv run googlemcp auth login`. Details: [docs/access-longevity.md](docs/access-longevity.md).
 
 ## Repository layout
 
 ```
-catalog/services.json     Product catalog shared by Terraform and the server
-infra/terraform/          API enablement, opt-in secret containers, state bucket, tests
-src/googlemcp/            Local stdio MCP server: adapters in services/, core, CLI
-scripts/                  Inventory generator, offline pre-auth checks, stored-client verifier
-tests/                    pytest suite (offline; tests/live runs only with GOOGLEMCP_LIVE=1)
-docs/                     Setup, client, and design documentation
+catalog/services.json     Single source of truth for all 19 Google products
+infra/terraform/          Optional API enablement, opt-in Secret Manager containers, state bucket, tests
+src/googlemcp/            Local stdio MCP server: 19 adapters in services/, policy, auth, secretstore, CLI
+scripts/                  Inventory generator and offline acceptance helpers
+tests/                    Offline pytest + socket-guarded stdio e2e suite (tests/live requires GOOGLEMCP_LIVE=1)
+docs/                     Setup, client, longevity, acceptance, and security documentation
 ```
 
-Design: [docs/architecture.md](docs/architecture.md). Development workflow
-and checks: [docs/development.md](docs/development.md). Contributions:
-[CONTRIBUTING.md](CONTRIBUTING.md). Changes: [CHANGELOG.md](CHANGELOG.md).
+Architecture: [docs/architecture.md](docs/architecture.md). Development & tests: [docs/development.md](docs/development.md). Contributing: [CONTRIBUTING.md](CONTRIBUTING.md). Changelog: [CHANGELOG.md](CHANGELOG.md).
 
 ## License
 
