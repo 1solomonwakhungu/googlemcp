@@ -1,0 +1,72 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+  "name": "io.github.1solomonwakhungu/googlemcp",
+  "title": "GoogleMCP",
+  "description": "Local stdio MCP server for 19 Google APIs (Workspace, YouTube, GA4, Search Console, Photos).",
+  "version": "0.1.0",
+  "websiteUrl": "https://github.com/1solomonwakhungu/googlemcp#readme",
+  "repository": {
+    "url": "https://github.com/1solomonwakhungu/googlemcp",
+    "source": "github"
+  },
+  "packages": [
+    {
+      "registryType": "pypi",
+      "registryBaseUrl": "https://pypi.org",
+      "identifier": "googlemcp",
+      "version": "0.1.0",
+      "runtimeHint": "uvx",
+      "transport": {
+        "type": "stdio"
+      },
+      "packageArguments": [
+        {
+          "type": "positional",
+          "value": "serve",
+          "description": "Run the local stdio MCP server."
+        }
+      ],
+      "environmentVariables": [
+        {
+          "name": "GOOGLEMCP_PRODUCTS",
+          "description": "Comma-separated Google product keys to enable (unset enables the 15 default products read-only).",
+          "format": "string",
+          "placeholder": "tasks,calendar,gmail,drive",
+          "isRequired": false,
+          "isSecret": false
+        },
+        {
+          "name": "GOOGLEMCP_WRITE_PRODUCTS",
+          "description": "Comma-separated enabled product keys (or 'all') granted non-destructive write tools and write scopes.",
+          "format": "string",
+          "placeholder": "tasks,docs",
+          "isRequired": false,
+          "isSecret": false
+        },
+        {
+          "name": "GOOGLEMCP_ALLOW_DESTRUCTIVE",
+          "description": "Set to 'true' to also expose destructive tools (delete, trash, send) for write-enabled products.",
+          "format": "boolean",
+          "default": "false",
+          "isRequired": false,
+          "isSecret": false
+        },
+        {
+          "name": "GOOGLEMCP_SECRET_BACKEND",
+          "description": "Secret storage backend for OAuth client credentials and refresh tokens.",
+          "format": "string",
+          "default": "keyring",
+          "choices": [
+            "keyring",
+            "file",
+            "dir",
+            "env",
+            "secretmanager"
+          ],
+          "isRequired": false,
+          "isSecret": false
+        }
+      ]
+    }
+  ]
+}
