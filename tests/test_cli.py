@@ -436,3 +436,198 @@ def test_doctor_reports_stdio_and_no_http_checks(
     assert config["detail"].startswith("transport=stdio")
     assert "oauth state" not in names and "serving policy" not in names
     assert not any(n.startswith("secret mcp-") for n in names)
+
+
+# auth verify-client and auth login --verify
+
+
+def _desktop_client_json(
+    tmp_path: Path,
+    *,
+    kind: str = "installed",
+    client_id: str = "cid-123.apps.googleusercontent.com",
+    client_secret: str | None = None,
+) -> Path:
+    secret_value = "sec-1" if client_secret is None else client_secret
+    path = tmp_path / f"client_secret_{kind}.json"
+    path.write_text(
+        json.dumps({kind: {"client_id": client_id, "client_secret": secret_value}}),
+        encoding="utf-8",
+    )
+    return path
+
+
+def test_auth_verify_client_matching_human_and_json(
+    file_backend: Path, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    from googlemcp.secretstore import FileStore
+
+    store = FileStore(file_backend)
+    store.set(SecretKey.OAUTH_CLIENT_ID, "cid-123.apps.googleusercontent.com")
+    store.set(SecretKey.OAUTH_CLIENT_SECRET, "sec-1")
+    path = _desktop_client_json(tmp_path)
+
+    code, out, err = run(["auth", "verify-client", str(path)], capsys)
+    assert code == cli.EXIT_OK
+    assert "matches" in out and "delete" in out
+    assert "cid-123" not in out + err and "sec-1" not in out + err
+
+    code, out, err = run(["auth", "verify-client", "--json", str(path)], capsys)
+    assert code == cli.EXIT_OK
+    payload = json.loads(out)
+    assert payload == {"backend": "file", "matches": True, "problems": []}
+    assert "cid-123" not in out + err and "sec-1" not in out + err
+
+
+def test_auth_verify_client_mismatched_secret_fails_without_leaking(
+    file_backend: Path, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    from googlemcp.secretstore import FileStore
+
+    store = FileStore(file_backend)
+    store.set(SecretKey.OAUTH_CLIENT_ID, "cid-123.apps.googleusercontent.com")
+    store.set(SecretKey.OAUTH_CLIENT_SECRET, "sec-old")
+    path = _desktop_client_json(tmp_path, client_secret="sec-new")
+
+    code, out, err = run(["auth", "verify-client", str(path)], capsys)
+    assert code == cli.EXIT_FAIL
+    assert "does not match the client secret" in err and "KEEP" in err
+    assert "sec-old" not in out + err and "sec-new" not in out + err and "cid-123" not in out + err
+
+    code, out, err = run(["auth", "verify-client", "--json", str(path)], capsys)
+    assert code == cli.EXIT_FAIL
+    payload = json.loads(out)
+    assert payload["backend"] == "file"
+    assert payload["matches"] is False
+    assert any("does not match the client secret" in p for p in payload["problems"])
+    assert "sec-old" not in out + err and "sec-new" not in out + err and "cid-123" not in out + err
+
+
+def test_auth_verify_client_missing_stored_client_fails(
+    file_backend: Path, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    path = _desktop_client_json(tmp_path)
+
+    code, out, err = run(["auth", "verify-client", str(path)], capsys)
+    assert code == cli.EXIT_FAIL
+    assert "oauth-client-id" in err and "oauth-client-secret" in err and "KEEP" in err
+    assert "sec-1" not in out + err and "cid-123" not in out + err
+
+    code, out, err = run(["auth", "verify-client", "--json", str(path)], capsys)
+    assert code == cli.EXIT_FAIL
+    payload = json.loads(out)
+    assert payload["matches"] is False and len(payload["problems"]) == 2
+
+
+def test_auth_verify_client_rejects_unusable_files(
+    file_backend: Path, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    web = _desktop_client_json(tmp_path, kind="web", client_id="web-id", client_secret="web-sec")
+    code, out, err = run(["auth", "verify-client", str(web)], capsys)
+    assert code == cli.EXIT_USAGE
+    assert "Desktop app client" in err
+    assert "web-id" not in out + err and "web-sec" not in out + err
+
+    sa = tmp_path / "service_account.json"
+    sa.write_text('{"type": "service_account"}', encoding="utf-8")
+    code, _, err = run(["auth", "verify-client", str(sa)], capsys)
+    assert code == cli.EXIT_USAGE and "error:" in err
+
+    bad = tmp_path / "broken.json"
+    bad.write_text("{not-json", encoding="utf-8")
+    code, _, err = run(["auth", "verify-client", str(bad)], capsys)
+    assert code == cli.EXIT_USAGE and "not valid JSON" in err
+
+    code, _, err = run(["auth", "verify-client", str(tmp_path / "missing.json")], capsys)
+    assert code == cli.EXIT_USAGE and "does not exist" in err
+
+
+def test_auth_verify_client_respects_secret_backend_flag(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    from googlemcp.secretstore import FileStore
+
+    secrets_file = tmp_path / "secrets.json"
+    store = FileStore(secrets_file)
+    store.set(SecretKey.OAUTH_CLIENT_ID, "cid-9")
+    store.set(SecretKey.OAUTH_CLIENT_SECRET, "sec-9")
+    monkeypatch.setenv("GOOGLEMCP_SECRET_BACKEND", "env")
+    monkeypatch.setenv("GOOGLEMCP_SECRET_FILE", str(secrets_file))
+    path = _desktop_client_json(tmp_path, client_id="cid-9", client_secret="sec-9")
+
+    code, out, _ = run(
+        ["--secret-backend", "file", "auth", "verify-client", "--json", str(path)], capsys
+    )
+    assert code == cli.EXIT_OK
+    assert json.loads(out) == {"backend": "file", "matches": True, "problems": []}
+
+
+def test_auth_login_verify_succeeds(
+    file_backend: Path,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    from googlemcp.auth import flow
+
+    monkeypatch.setenv("GOOGLEMCP_PRODUCTS", "tasks")
+    path = _desktop_client_json(tmp_path)
+
+    real_login = flow.login
+
+    class _FakeFlow:
+        def run_local_server(self, **kwargs: Any) -> Any:
+            return types.SimpleNamespace(
+                refresh_token="refresh-123",
+                granted_scopes=["https://www.googleapis.com/auth/tasks.readonly"],
+            )
+
+    monkeypatch.setattr(
+        flow,
+        "login",
+        lambda *a, **k: real_login(*a, flow_factory=lambda cfg, scopes: _FakeFlow(), **k),
+    )
+    code, out, err = run(
+        ["auth", "login", "--client-secrets", str(path), "--verify", "--no-browser"], capsys
+    )
+    assert code == cli.EXIT_OK
+    assert "Verified Desktop client" in out and "delete" in out
+    combined = out + err
+    assert "sec-1" not in combined and "cid-123" not in combined and "refresh-123" not in combined
+
+
+def test_auth_login_verify_fails_on_mismatch(
+    file_backend: Path,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    from googlemcp.auth import LoginResult, flow
+    from googlemcp.secretstore import FileStore
+
+    monkeypatch.setenv("GOOGLEMCP_PRODUCTS", "tasks")
+    store = FileStore(file_backend)
+    store.set(SecretKey.OAUTH_CLIENT_ID, "cid-123.apps.googleusercontent.com")
+    store.set(SecretKey.OAUTH_CLIENT_SECRET, "sec-old")
+    path = _desktop_client_json(tmp_path, client_secret="sec-new")
+
+    monkeypatch.setattr(
+        flow,
+        "login",
+        lambda *a, **k: LoginResult(["https://www.googleapis.com/auth/tasks.readonly"], []),
+    )
+    code, out, err = run(
+        ["auth", "login", "--client-secrets", str(path), "--verify", "--no-browser"], capsys
+    )
+    assert code == cli.EXIT_FAIL
+    assert "does not match the client secret" in err and "KEEP" in err
+    assert "delete" not in out
+    assert "sec-old" not in out + err and "sec-new" not in out + err and "cid-123" not in out + err
+
+
+def test_auth_login_verify_requires_client_secrets(
+    file_backend: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    code, _, err = run(["auth", "login", "--verify", "--no-browser"], capsys)
+    assert code == cli.EXIT_USAGE
+    assert "--client-secrets" in err

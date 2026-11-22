@@ -97,18 +97,33 @@ def next_auth_step(client_configured: bool, refresh_token_present: bool) -> str 
 
 
 def cmd_auth_login(args: argparse.Namespace) -> int:
+    if args.verify and not args.client_secrets:
+        print("error: --verify requires --client-secrets PATH", file=sys.stderr)
+        return EXIT_USAGE
     settings = _settings(args)
     store = open_store(settings)
     scopes = required_scopes(settings, discover_adapters())
+    client_path = Path(args.client_secrets) if args.client_secrets else None
     result = auth_flow.login(
         store,
         scopes,
-        client_secrets=Path(args.client_secrets) if args.client_secrets else None,
+        client_secrets=client_path,
         open_browser=not args.no_browser,
         port=args.port,
         login_hint=args.login_hint,
     )
     print(f"Stored refresh token in the {store.name} store.")
+    verification: auth_flow.ClientVerificationResult | None = None
+    if args.verify and client_path is not None:
+        verification = auth_flow.verify_stored_client(store, client_path)
+        if not verification.matches:
+            for problem in verification.problems:
+                print(f"error: {problem}", file=sys.stderr)
+            print(
+                f"KEEP {args.client_secrets}; stored client does not match the file.",
+                file=sys.stderr,
+            )
+            return EXIT_FAIL
     if result.granted_scopes is None:
         print(
             "Google did not report which scopes were granted; "
@@ -121,9 +136,40 @@ def cmd_auth_login(args: argparse.Namespace) -> int:
         print("Not granted (tools needing them will fail):", file=sys.stderr)
         for scope in result.missing_scopes:
             print(f"  {scope}", file=sys.stderr)
-    if args.client_secrets:
+    if verification is not None:
+        print(
+            f"Verified Desktop client in the {verification.backend} store matches "
+            f"{args.client_secrets}. You can now delete the file."
+        )
+    elif args.client_secrets:
         print(f"Client stored. You can now delete {args.client_secrets}.")
     return EXIT_OK
+
+
+def cmd_auth_verify_client(args: argparse.Namespace) -> int:
+    store = open_store(_settings(args))
+    try:
+        result = auth_flow.verify_stored_client(store, Path(args.client_secrets))
+    except AuthError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return EXIT_USAGE
+    if args.json:
+        _print_json(result.as_dict())
+        return EXIT_OK if result.matches else EXIT_FAIL
+    if result.matches:
+        print(
+            f"Desktop client in the {result.backend} store matches {args.client_secrets}. "
+            "You can now delete the file."
+        )
+        return EXIT_OK
+    for problem in result.problems:
+        print(f"error: {problem}", file=sys.stderr)
+    print(
+        f"KEEP {args.client_secrets}; store it again with "
+        f"`googlemcp auth login --client-secrets {args.client_secrets}`, then rerun this check.",
+        file=sys.stderr,
+    )
+    return EXIT_FAIL
 
 
 def cmd_auth_status(args: argparse.Namespace) -> int:
@@ -380,6 +426,11 @@ def build_parser() -> argparse.ArgumentParser:
     login.add_argument(
         "--login-hint", metavar="EMAIL", help="preselect this Google account on the consent page"
     )
+    login.add_argument(
+        "--verify",
+        action="store_true",
+        help="after login, verify the stored Desktop client matches --client-secrets",
+    )
     login.set_defaults(func=cmd_auth_login)
     status = auth.add_parser("status", help="show credential health without secrets")
     status.add_argument("--json", action="store_true")
@@ -387,6 +438,17 @@ def build_parser() -> argparse.ArgumentParser:
     status.set_defaults(func=cmd_auth_status)
     revoke = auth.add_parser("revoke", help="revoke the refresh token and delete it")
     revoke.set_defaults(func=cmd_auth_revoke)
+    verify = auth.add_parser(
+        "verify-client",
+        help="confirm the stored Desktop OAuth client matches a downloaded JSON file",
+    )
+    verify.add_argument(
+        "client_secrets",
+        metavar="PATH",
+        help="Desktop app OAuth client JSON downloaded from Google Cloud",
+    )
+    verify.add_argument("--json", action="store_true")
+    verify.set_defaults(func=cmd_auth_verify_client)
 
     secret = sub.add_parser("secret", help="manage stored secrets").add_subparsers(
         dest="secret_command", required=True
