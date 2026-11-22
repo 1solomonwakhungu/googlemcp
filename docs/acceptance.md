@@ -125,18 +125,19 @@ Delete the downloaded client JSON only after the store is confirmed to hold
 exactly this client. Login can fail before the client is stored, and
 `auth status` alone is not proof: an older stored client (for example from
 before a secret rotation) can still refresh the token.
-`scripts/acceptance/verify_stored_client.py` compares the stored
-`oauth-client-id` and `oauth-client-secret` with the file without printing
-them, so the `rm` runs only when everything passes:
+`googlemcp auth verify-client` compares the stored `oauth-client-id` and
+`oauth-client-secret` with the file without printing them, so the `rm` runs
+only when everything passes (`scripts/acceptance/verify_stored_client.py`
+remains as a compatibility wrapper):
 
 ```sh
 uv run googlemcp auth status \
-  && uv run python scripts/acceptance/verify_stored_client.py --json "$CLIENT_JSON" \
+  && uv run googlemcp auth verify-client "$CLIENT_JSON" \
   && rm "$CLIENT_JSON"
 ```
 
-The verifier reads the store chosen at the top (or pass
-`--secret-backend NAME`). It exits `0` on a match, `1` when a value is
+The verifier reads the store chosen at the top (or pass `--secret-backend NAME`
+before `auth verify-client`). It exits `0` on a match, `1` when a value is
 missing or different, and `2` when the file is not a Desktop client JSON. If
 any command fails, keep the file, fix what it reports, and run the login
 again with the same file.

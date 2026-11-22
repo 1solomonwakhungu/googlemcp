@@ -6,7 +6,14 @@ from typing import Any
 import pytest
 
 from conftest import MemoryStore
-from googlemcp.auth import AuthError, CredentialProvider, login, revoke, status
+from googlemcp.auth import (
+    AuthError,
+    CredentialProvider,
+    login,
+    revoke,
+    status,
+    verify_stored_client,
+)
 from googlemcp.auth.credentials import invalid_grant_message
 from googlemcp.auth.flow import CLIENTS_CONSOLE_URL, read_client_secrets
 from googlemcp.redaction import redact
@@ -259,6 +266,100 @@ def test_web_client_json_rejected(tmp_path: Path) -> None:
     with pytest.raises(AuthError, match="Desktop app client") as info:
         read_client_secrets(_client_json(tmp_path, kind="web"))
     assert "'web'" in str(info.value) and CLIENTS_CONSOLE_URL in str(info.value)
+
+
+def test_verify_stored_client_matches(tmp_path: Path) -> None:
+    store = MemoryStore(
+        {
+            SecretKey.OAUTH_CLIENT_ID: "id-123.apps.googleusercontent.com",
+            SecretKey.OAUTH_CLIENT_SECRET: "sec-1",
+        }
+    )
+    path = tmp_path / "client_secret.json"
+    path.write_text(
+        json.dumps(
+            {
+                "installed": {
+                    "client_id": "id-123.apps.googleusercontent.com",
+                    "client_secret": "sec-1",
+                }
+            }
+        ),
+        encoding="utf-8",
+    )
+    result = verify_stored_client(store, path)
+    assert result.matches is True
+    assert result.backend == "memory"
+    assert result.problems == []
+    dumped = json.dumps(result.as_dict())
+    assert "id-123" not in dumped and "sec-1" not in dumped
+
+
+def test_verify_stored_client_detects_rotated_secret(tmp_path: Path) -> None:
+    store = MemoryStore(
+        {
+            SecretKey.OAUTH_CLIENT_ID: "id-123.apps.googleusercontent.com",
+            SecretKey.OAUTH_CLIENT_SECRET: "sec-old",
+        }
+    )
+    path = tmp_path / "client_secret.json"
+    path.write_text(
+        json.dumps(
+            {
+                "installed": {
+                    "client_id": "id-123.apps.googleusercontent.com",
+                    "client_secret": "sec-new",
+                }
+            }
+        ),
+        encoding="utf-8",
+    )
+    result = verify_stored_client(store, path)
+    assert result.matches is False
+    assert len(result.problems) == 1
+    assert "does not match the client secret" in result.problems[0]
+    dumped = json.dumps(result.as_dict())
+    assert "sec-old" not in dumped and "sec-new" not in dumped and "id-123" not in dumped
+
+
+def test_verify_stored_client_detects_mismatched_id_and_missing_values(tmp_path: Path) -> None:
+    path = _client_json(tmp_path)
+    empty = verify_stored_client(MemoryStore(), path)
+    assert empty.matches is False
+    assert len(empty.problems) == 2
+    assert any("oauth-client-id" in p and "missing" in p for p in empty.problems)
+    assert any("oauth-client-secret" in p and "missing" in p for p in empty.problems)
+
+    wrong_id = verify_stored_client(
+        MemoryStore(
+            {
+                SecretKey.OAUTH_CLIENT_ID: "other-cid",
+                SecretKey.OAUTH_CLIENT_SECRET: "csecret",
+            }
+        ),
+        path,
+    )
+    assert wrong_id.matches is False
+    assert wrong_id.problems == ["stored oauth-client-id does not match the client ID in the file"]
+
+
+@pytest.mark.parametrize(
+    "content",
+    [
+        '{"web": {"client_id": "w", "client_secret": "s"}}',
+        '{"type": "service_account"}',
+        '{"installed": null}',
+        '{"installed": {"client_id": "only-id"}}',
+        "not json",
+        None,
+    ],
+)
+def test_verify_stored_client_rejects_unusable_files(tmp_path: Path, content: str | None) -> None:
+    path = tmp_path / "client.json"
+    if content is not None:
+        path.write_text(content, encoding="utf-8")
+    with pytest.raises(AuthError):
+        verify_stored_client(MemoryStore(), path)
 
 
 # Status and revoke

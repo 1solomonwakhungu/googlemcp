@@ -9,6 +9,7 @@ the secret store, and never written anywhere else.
 
 from __future__ import annotations
 
+import hmac
 import json
 import os
 from collections.abc import Callable, Sequence
@@ -74,14 +75,71 @@ def read_client_secrets(path: Path) -> ClientConfig:
     if not isinstance(raw, dict) or "installed" not in raw:
         kind = next(iter(raw), "unknown") if isinstance(raw, dict) and raw else "unknown"
         raise AuthError(
-            f"{path} is a {kind!r} OAuth client. `auth login` needs a Desktop app client "
+            f"{path} is a {kind!r} OAuth client. GoogleMCP needs a Desktop app client "
             f"(JSON top-level key 'installed'). {client_setup_hint()}"
         )
     section = raw["installed"]
+    if not isinstance(section, dict):
+        raise AuthError(f"{path} is missing client_id or client_secret")
     client_id, client_secret = section.get("client_id"), section.get("client_secret")
-    if not client_id or not client_secret:
+    if (
+        not isinstance(client_id, str)
+        or not isinstance(client_secret, str)
+        or not client_id
+        or not client_secret
+    ):
         raise AuthError(f"{path} is missing client_id or client_secret")
     return ClientConfig(client_id=client_id, client_secret=client_secret)
+
+
+@dataclass(frozen=True)
+class ClientVerificationResult:
+    """Outcome of comparing stored OAuth client credentials with a JSON file.
+
+    Never contains the client_id or client_secret values.
+    """
+
+    backend: str
+    matches: bool
+    problems: list[str] = field(default_factory=list)
+
+    def as_dict(self) -> dict[str, Any]:
+        return {
+            "backend": self.backend,
+            "matches": self.matches,
+            "problems": list(self.problems),
+        }
+
+
+def _constant_time_equal(stored: str | None, wanted: str) -> bool:
+    return stored is not None and hmac.compare_digest(
+        stored.encode("utf-8"), wanted.encode("utf-8")
+    )
+
+
+def verify_stored_client(store: SecretStore, client_secrets: Path) -> ClientVerificationResult:
+    """Confirm the secret store holds the exact Desktop OAuth client in ``client_secrets``.
+
+    Raises AuthError if ``client_secrets`` is missing, unreadable, invalid JSON, or
+    not a Desktop app client (top-level key ``installed``). Never returns or logs
+    the client ID or client secret values.
+    """
+    client = read_client_secrets(client_secrets)
+    keys = (SecretKey.OAUTH_CLIENT_ID, SecretKey.OAUTH_CLIENT_SECRET)
+    wanted_values = (client.client_id, client.client_secret)
+    labels = ("client ID", "client secret")
+    problems: list[str] = []
+    for key, wanted, what in zip(keys, wanted_values, labels, strict=True):
+        stored = store.get(key)
+        if not stored:
+            problems.append(f"{key.value} is missing from the {store.name} store")
+        elif not _constant_time_equal(stored, wanted):
+            problems.append(f"stored {key.value} does not match the {what} in the file")
+    return ClientVerificationResult(
+        backend=store.name,
+        matches=not problems,
+        problems=problems,
+    )
 
 
 def resolve_client(store: SecretStore, client_secrets: Path | None) -> ClientConfig:

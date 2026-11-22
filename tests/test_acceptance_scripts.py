@@ -311,4 +311,4 @@ def test_runbook_deletes_client_json_only_after_verification() -> None:
     commands = re.sub(r"\\\n\s*", " ", text)  # join shell line continuations
     for line in commands.splitlines():
         if re.search(r"\brm\b.*CLIENT_JSON|\brm\b.*client_secret", line):
-            assert "verify_stored_client.py" in line, line
+            assert "auth verify-client" in line or "verify_stored_client.py" in line, line

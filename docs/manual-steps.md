@@ -219,7 +219,7 @@ If you later enable more products or writes, export the new settings, rerun
 
    ```sh
    uv run googlemcp auth status \
-     && uv run python scripts/acceptance/verify_stored_client.py --json ~/Downloads/client_secret_XXXX.json \
+     && uv run googlemcp auth verify-client ~/Downloads/client_secret_XXXX.json \
      && rm ~/Downloads/client_secret_XXXX.json
    ```
 
@@ -227,18 +227,21 @@ If you later enable more products or writes, export the new settings, rerun
 
    ```sh
    uv run googlemcp --secret-backend secretmanager auth status \
-     && uv run python scripts/acceptance/verify_stored_client.py --json ~/Downloads/client_secret_XXXX.json --secret-backend secretmanager \
+     && uv run googlemcp --secret-backend secretmanager auth verify-client ~/Downloads/client_secret_XXXX.json \
      && rm ~/Downloads/client_secret_XXXX.json
    ```
 
    `auth status` exits 0 only when a client and refresh token are stored and a
    live token refresh succeeds. That alone does not prove the stored secret is
    the one in this file: after a secret rotation the old secret can still
-   refresh until you delete it. `verify_stored_client.py` closes that gap. It
-   opens the same store the server uses, compares the stored client ID and
-   secret with the file without printing either, and exits 0 only when both
-   match. If either command fails, keep the file, fix what it reports, and
-   rerun item 6. `uv run googlemcp doctor` gives a fuller report.
+   refresh until you delete it. `auth verify-client` closes that gap and works
+   with `uvx` without a repository clone (`scripts/acceptance/verify_stored_client.py`
+   remains as a compatibility wrapper). It opens the same store the server uses,
+   compares the stored client ID and secret with the file without printing
+   either, and exits 0 only when both match. You can also pass `--verify` to
+   `auth login` in item 6 to run this check immediately after sign-in. If either
+   command fails, keep the file, fix what it reports, and rerun item 6.
+   `uv run googlemcp doctor` gives a fuller report.
 
 OAuth clients unused for six months are deleted automatically; Google emails
 the project owners 30 days before
@@ -280,7 +283,7 @@ each command if you use that backend.
 - **Client secret lost or leaked:** on the client's page in
   <https://console.cloud.google.com/auth/clients?project=PROJECT_ID>, add a new
   secret and download the client JSON, store it and sign in again (section 5,
-  item 6), and run the section 5, item 7 check. Its `verify_stored_client.py`
+  item 6), and run the section 5, item 7 check. Its `auth verify-client`
   step fails while the old secret is still stored, which `auth status` alone
   would not catch. Delete the old secret in the console only after the check
   passes; until then the old secret is what keeps the server working.
